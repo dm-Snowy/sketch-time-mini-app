@@ -3,7 +3,7 @@ class SketchTimer {
         this.userId = null;
         this.userName = null;
         this.timer = null;
-        this.timeLeft = 25 * 60; // 25 minutes in seconds
+        this.timeLeft = 15 * 60; // 15 minutes in seconds
         this.isRunning = false;
         this.stats = null;
         
@@ -221,7 +221,7 @@ class SketchTimer {
     resetTimer() {
         this.isRunning = false;
         clearInterval(this.timer);
-        this.timeLeft = 25 * 60;
+        this.timeLeft = 15 * 60;
         this.updateTimerDisplay();
         this.startBtn.textContent = 'Start';
         this.startBtn.disabled = false;
