@@ -4,6 +4,7 @@ const path = require('path');
 const { initDatabase, saveUpload, getUserStats, markSessionComplete, hasUploadedToday } = require('./database');
 
 // Initialize bot and express app
+console.log('BOT_TOKEN available:', !!process.env.BOT_TOKEN);
 const bot = new Telegraf(process.env.BOT_TOKEN || 'your_bot_token_here');
 const app = express();
 
