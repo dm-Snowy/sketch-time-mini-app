@@ -60,7 +60,17 @@
                 <button class="preset-btn active" data-minutes="25">25m</button>
                 <button class="preset-btn" data-minutes="30">30m</button>
                 <button class="preset-btn" data-minutes="45">45m</button>
+                <button class="preset-btn" data-minutes="60">1h</button>
             </div>
+        </div>
+
+        <!-- Upload Sketch Button -->
+        <div class="upload-section">
+            <button id="upload-btn" class="btn btn-upload" disabled>
+                <span class="btn-icon">📸</span>
+                Upload Sketch
+            </button>
+            <p class="upload-help" id="upload-help">Start the timer to enable sketch upload</p>
         </div>
 
         <!-- Done Button -->
@@ -70,12 +80,6 @@
                 Mark Session Complete
             </button>
             <p class="done-help" id="done-help">Upload a sketch today to mark your session complete</p>
-        </div>
-
-        <!-- Statistics Chart -->
-        <div class="chart-section">
-            <h3>Recent Activity</h3>
-            <canvas id="activity-chart" width="400" height="200"></canvas>
         </div>
 
         <!-- Stats Summary -->

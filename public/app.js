@@ -45,6 +45,7 @@ class SketchTimer {
         this.pauseBtn = document.getElementById('timer-pause');
         this.resetBtn = document.getElementById('timer-reset');
         this.doneBtn = document.getElementById('done-btn');
+        this.uploadBtn = document.getElementById('upload-btn');
         this.presetBtns = document.querySelectorAll('.preset-btn');
         this.currentStreakEl = document.getElementById('current-streak');
         this.longestStreakEl = document.getElementById('longest-streak');
@@ -52,7 +53,11 @@ class SketchTimer {
         this.statusIconEl = document.getElementById('status-icon');
         this.statusTextEl = document.getElementById('status-text');
         this.doneHelpEl = document.getElementById('done-help');
+        this.uploadHelpEl = document.getElementById('upload-help');
         this.totalSketchesEl = document.getElementById('total-sketches');
+        
+        this.timerStartedToday = false;
+        this.timerCompleted = false;
     }
     
     initializeEventListeners() {
@@ -68,6 +73,9 @@ class SketchTimer {
         
         // Done button
         this.doneBtn.addEventListener('click', () => this.markSessionComplete());
+        
+        // Upload button
+        this.uploadBtn.addEventListener('click', () => this.openUploadDialog());
     }
     
     async loadUserStats() {
@@ -85,7 +93,6 @@ class SketchTimer {
             
             this.stats = await response.json();
             this.updateUI();
-            this.initializeChart();
             
         } catch (error) {
             console.error('Error loading user stats:', error);
@@ -117,8 +124,11 @@ class SketchTimer {
             this.statusIconEl.textContent = '📸';
             this.statusTextEl.textContent = 'No sketch uploaded today';
             this.doneBtn.disabled = true;
-            this.doneHelpEl.textContent = 'Upload a sketch through the bot to mark your session complete';
+            this.doneHelpEl.textContent = 'Upload a sketch today to mark your session complete';
         }
+        
+        // Update upload button state
+        this.updateUploadButtonState();
         
         // Calculate weekly and monthly stats
         this.updateWeeklyMonthlyStats();
@@ -148,63 +158,25 @@ class SketchTimer {
         document.getElementById('month-count').textContent = monthCount;
     }
     
-    initializeChart() {
-        const ctx = document.getElementById('activity-chart').getContext('2d');
+    updateUploadButtonState() {
+        const hasUploadedToday = this.stats?.hasUploadedToday;
         
-        // Prepare chart data
-        const last7Days = [];
-        const labels = [];
-        const data = [];
-        
-        // Generate last 7 days
-        for (let i = 6; i >= 0; i--) {
-            const date = new Date();
-            date.setDate(date.getDate() - i);
-            const dateStr = date.toISOString().split('T')[0];
-            last7Days.push(dateStr);
-            
-            // Format label
-            const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
-            labels.push(dayName);
+        if (hasUploadedToday) {
+            // Already uploaded today - disable button
+            this.uploadBtn.disabled = true;
+            this.uploadBtn.innerHTML = '<span class="btn-icon">✅</span> Sketch Uploaded Today';
+            this.uploadHelpEl.textContent = 'You\'ve already uploaded a sketch today!';
+        } else if (this.timerStartedToday || this.timerCompleted) {
+            // Timer started/completed today and no upload yet - enable button
+            this.uploadBtn.disabled = false;
+            this.uploadBtn.innerHTML = '<span class="btn-icon">📸</span> Upload Sketch';
+            this.uploadHelpEl.textContent = 'Ready to upload your sketch!';
+        } else {
+            // Timer not started today - disable button
+            this.uploadBtn.disabled = true;
+            this.uploadBtn.innerHTML = '<span class="btn-icon">📸</span> Upload Sketch';
+            this.uploadHelpEl.textContent = 'Start the timer to enable sketch upload';
         }
-        
-        // Map data to dates
-        last7Days.forEach(date => {
-            const dayData = this.stats.recentHistory?.find(h => h.upload_date === date);
-            data.push(dayData ? dayData.sketches : 0);
-        });
-        
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Sketches',
-                    data: data,
-                    backgroundColor: '#667eea',
-                    borderColor: '#5a6fd8',
-                    borderWidth: 1,
-                    borderRadius: 4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                }
-            }
-        });
     }
     
     // Timer functionality
@@ -217,9 +189,13 @@ class SketchTimer {
     startTimer() {
         if (!this.isRunning) {
             this.isRunning = true;
+            this.timerStartedToday = true;
             this.startBtn.textContent = 'Running...';
             this.startBtn.disabled = true;
             document.querySelector('.timer-section').classList.add('timer-running');
+            
+            // Update upload button state when timer starts
+            this.updateUploadButtonState();
             
             this.timer = setInterval(() => {
                 this.timeLeft--;
@@ -265,7 +241,11 @@ class SketchTimer {
     
     timerComplete() {
         this.pauseTimer();
+        this.timerCompleted = true;
         this.showSuccess('🎉 Timer complete! Great work on your sketch session!');
+        
+        // Update upload button state when timer completes
+        this.updateUploadButtonState();
         
         // Show notification if available
         if ('Notification' in window && Notification.permission === 'granted') {
@@ -327,6 +307,17 @@ class SketchTimer {
         setTimeout(() => {
             feedback.remove();
         }, 5000);
+    }
+    
+    openUploadDialog() {
+        if (window.Telegram && window.Telegram.WebApp) {
+            // Request camera access through Telegram
+            const tg = window.Telegram.WebApp;
+            tg.showAlert('Please upload your sketch through the bot chat by sending a photo!');
+        } else {
+            // Fallback for testing
+            alert('Please upload your sketch through the Telegram bot by sending a photo!');
+        }
     }
     
     showError(message) {

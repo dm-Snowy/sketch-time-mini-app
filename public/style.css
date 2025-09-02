@@ -186,6 +186,21 @@ body {
     transform: translateY(-2px);
 }
 
+.btn-upload {
+    background: #667eea;
+    color: white;
+    width: 100%;
+    justify-content: center;
+    padding: 15px;
+    font-size: 1.1em;
+    margin-bottom: 20px;
+}
+
+.btn-upload:hover:not(:disabled) {
+    background: #5a6fd8;
+    transform: translateY(-2px);
+}
+
 .btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -215,6 +230,17 @@ body {
     background: #667eea;
     border-color: #667eea;
     color: white;
+}
+
+.upload-section {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.upload-help {
+    margin-top: 10px;
+    color: #6c757d;
+    font-size: 0.9em;
 }
 
 .action-section {
