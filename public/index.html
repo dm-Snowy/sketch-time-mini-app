@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sketch-Time Tracker</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🎨 Sketch-Time</h1>
+            <div class="user-info">
+                <span id="user-name">Loading...</span>
+            </div>
+        </header>
+
+        <!-- Streak Display -->
+        <div class="streak-container">
+            <div class="streak-card current">
+                <div class="streak-icon">🔥</div>
+                <div class="streak-info">
+                    <h3>Current Streak</h3>
+                    <span class="streak-number" id="current-streak">0</span>
+                    <span class="streak-label">days</span>
+                </div>
+            </div>
+            <div class="streak-card longest">
+                <div class="streak-icon">🏆</div>
+                <div class="streak-info">
+                    <h3>Longest Streak</h3>
+                    <span class="streak-number" id="longest-streak">0</span>
+                    <span class="streak-label">days</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Status -->
+        <div class="upload-status" id="upload-status">
+            <div class="status-icon" id="status-icon">⏳</div>
+            <span class="status-text" id="status-text">Checking upload status...</span>
+        </div>
+
+        <!-- Timer Section -->
+        <div class="timer-section">
+            <h2>Focus Timer</h2>
+            <div class="timer-display">
+                <span id="timer-display">25:00</span>
+            </div>
+            <div class="timer-controls">
+                <button id="timer-start" class="btn btn-primary">Start</button>
+                <button id="timer-pause" class="btn btn-secondary">Pause</button>
+                <button id="timer-reset" class="btn btn-secondary">Reset</button>
+            </div>
+            <div class="timer-presets">
+                <button class="preset-btn" data-minutes="15">15m</button>
+                <button class="preset-btn active" data-minutes="25">25m</button>
+                <button class="preset-btn" data-minutes="30">30m</button>
+                <button class="preset-btn" data-minutes="45">45m</button>
+            </div>
+        </div>
+
+        <!-- Done Button -->
+        <div class="action-section">
+            <button id="done-btn" class="btn btn-success" disabled>
+                <span class="btn-icon">✓</span>
+                Mark Session Complete
+            </button>
+            <p class="done-help" id="done-help">Upload a sketch today to mark your session complete</p>
+        </div>
+
+        <!-- Statistics Chart -->
+        <div class="chart-section">
+            <h3>Recent Activity</h3>
+            <canvas id="activity-chart" width="400" height="200"></canvas>
+        </div>
+
+        <!-- Stats Summary -->
+        <div class="stats-summary">
+            <div class="stat-item">
+                <span class="stat-label">Total Sketches</span>
+                <span class="stat-value" id="total-sketches">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">This Week</span>
+                <span class="stat-value" id="week-count">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">This Month</span>
+                <span class="stat-value" id="month-count">0</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
