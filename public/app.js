@@ -44,7 +44,6 @@ class SketchTimer {
         this.startBtn = document.getElementById('timer-start');
         this.pauseBtn = document.getElementById('timer-pause');
         this.resetBtn = document.getElementById('timer-reset');
-        this.doneBtn = document.getElementById('done-btn');
         this.uploadBtn = document.getElementById('upload-btn');
         this.fileInput = document.getElementById('file-input');
         this.presetBtns = document.querySelectorAll('.preset-btn');
@@ -53,7 +52,6 @@ class SketchTimer {
         this.uploadStatusEl = document.getElementById('upload-status');
         this.statusIconEl = document.getElementById('status-icon');
         this.statusTextEl = document.getElementById('status-text');
-        this.doneHelpEl = document.getElementById('done-help');
         this.uploadHelpEl = document.getElementById('upload-help');
         this.totalSketchesEl = document.getElementById('total-sketches');
         
@@ -72,8 +70,6 @@ class SketchTimer {
             btn.addEventListener('click', () => this.setTimerPreset(parseInt(btn.dataset.minutes)));
         });
         
-        // Done button
-        this.doneBtn.addEventListener('click', () => this.markSessionComplete());
         
         // Upload button
         this.uploadBtn.addEventListener('click', () => this.triggerFileSelection());
@@ -119,16 +115,12 @@ class SketchTimer {
             this.uploadStatusEl.classList.remove('not-uploaded');
             this.uploadStatusEl.classList.add('uploaded');
             this.statusIconEl.textContent = '✅';
-            this.statusTextEl.textContent = 'Great! You\'ve uploaded a sketch today';
-            this.doneBtn.disabled = false;
-            this.doneHelpEl.textContent = 'Ready to mark your session complete!';
+            this.statusTextEl.textContent = 'Sketch uploaded! Today\'s session is complete';
         } else {
             this.uploadStatusEl.classList.remove('uploaded');
             this.uploadStatusEl.classList.add('not-uploaded');
             this.statusIconEl.textContent = '📸';
             this.statusTextEl.textContent = 'No sketch uploaded today';
-            this.doneBtn.disabled = true;
-            this.doneHelpEl.textContent = 'Upload a sketch today to mark your session complete';
         }
         
         // Update upload button state
@@ -260,52 +252,13 @@ class SketchTimer {
         }
     }
     
-    async markSessionComplete() {
-        if (!this.userId) {
-            this.showError('User authentication required');
-            return;
-        }
-        
-        this.doneBtn.disabled = true;
-        this.doneBtn.innerHTML = '<span class="btn-icon">⏳</span> Processing...';
-        
-        try {
-            const response = await fetch('/done', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    userId: this.userId
-                }),
-            });
-            
-            const data = await response.json();
-            
-            if (response.ok && data.success) {
-                this.showSuccess(data.message);
-                // Reload stats to reflect changes
-                await this.loadUserStats();
-            } else {
-                this.showError(data.error || 'Failed to mark session complete');
-                this.doneBtn.disabled = false;
-                this.doneBtn.innerHTML = '<span class="btn-icon">✓</span> Mark Session Complete';
-            }
-            
-        } catch (error) {
-            console.error('Error marking session complete:', error);
-            this.showError('Network error. Please check your connection and try again.');
-            this.doneBtn.disabled = false;
-            this.doneBtn.innerHTML = '<span class="btn-icon">✓</span> Mark Session Complete';
-        }
-    }
     
     showSuccess(message) {
         const feedback = document.createElement('div');
         feedback.className = 'success-feedback';
         feedback.textContent = message;
         
-        const container = document.querySelector('.action-section');
+        const container = document.querySelector('.upload-section');
         container.appendChild(feedback);
         
         setTimeout(() => {
@@ -392,7 +345,7 @@ class SketchTimer {
         feedback.style.borderLeftColor = '#dc3545';
         feedback.textContent = message;
         
-        const container = document.querySelector('.action-section');
+        const container = document.querySelector('.upload-section');
         container.appendChild(feedback);
         
         setTimeout(() => {

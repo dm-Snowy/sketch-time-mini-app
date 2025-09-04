@@ -132,6 +132,9 @@ app.post('/upload', upload.single('sketch'), async (req, res) => {
         const filePath = req.file.path;
         await saveUpload(parseInt(userId), 'WebApp User', filePath);
         
+        // Automatically mark session as complete since upload happened
+        await markSessionComplete(parseInt(userId));
+        
         // Get updated stats
         const stats = await getUserStats(parseInt(userId));
         
