@@ -193,6 +193,9 @@ class SketchTimer {
             // Update upload button state when timer starts
             this.updateUploadButtonState();
             
+            // Notify backend about timer start
+            this.notifyTimerStart();
+            
             this.timer = setInterval(() => {
                 this.timeLeft--;
                 this.updateTimerDisplay();
@@ -334,6 +337,51 @@ class SketchTimer {
             console.error('Error uploading sketch:', error);
             this.showError('Network error. Please check your connection and try again.');
             this.updateUploadButtonState();
+        }
+    }
+    
+    async notifyTimerStart() {
+        if (!this.userId) return;
+        
+        const durationMinutes = Math.floor(this.timeLeft / 60);
+        
+        try {
+            await fetch('/start-timer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    userId: this.userId,
+                    duration: durationMinutes
+                }),
+            });
+            
+            console.log(`Timer started on backend: ${durationMinutes} minutes`);
+            
+        } catch (error) {
+            console.error('Error notifying backend about timer start:', error);
+        }
+    }
+    
+    async cancelTimerNotification() {
+        if (!this.userId) return;
+        
+        try {
+            await fetch('/cancel-timer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    userId: this.userId
+                }),
+            });
+            
+            console.log('Timer notification cancelled on backend');
+            
+        } catch (error) {
+            console.error('Error cancelling timer notification:', error);
         }
     }
     

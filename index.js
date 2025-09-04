@@ -3,6 +3,9 @@ const express = require('express');
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
+
+// Timer tracking storage
+const activeTimers = new Map(); // userId -> { duration, endTime, timeoutId }
 const { initDatabase, saveUpload, getUserStats, markSessionComplete, hasUploadedToday } = require('./database');
 
 // Initialize bot and express app
@@ -113,6 +116,85 @@ bot.on('document', (ctx) => {
 
 // API Routes
 
+// Start timer tracking
+app.post('/start-timer', async (req, res) => {
+    try {
+        const { userId, duration } = req.body; // duration in minutes
+        
+        if (!userId || !duration) {
+            return res.status(400).json({ error: 'User ID and duration are required' });
+        }
+        
+        const userIdInt = parseInt(userId);
+        const durationMs = duration * 60 * 1000; // convert to milliseconds
+        const endTime = Date.now() + durationMs;
+        
+        // Cancel existing timer for this user if any
+        if (activeTimers.has(userIdInt)) {
+            clearTimeout(activeTimers.get(userIdInt).timeoutId);
+        }
+        
+        // Schedule bot notification
+        const timeoutId = setTimeout(async () => {
+            try {
+                await bot.telegram.sendMessage(userIdInt, `⏰ Your ${duration}-minute session finished!`, {
+                    reply_markup: {
+                        inline_keyboard: [[
+                            { text: '🎨 Open Mini-App', web_app: { url: `${process.env.APP_URL || 'https://your-app-url.com'}` } }
+                        ]]
+                    }
+                });
+                
+                // Remove from active timers
+                activeTimers.delete(userIdInt);
+                console.log(`Timer notification sent to user ${userIdInt} for ${duration} minutes`);
+                
+            } catch (error) {
+                console.error('Error sending timer notification:', error);
+                activeTimers.delete(userIdInt);
+            }
+        }, durationMs);
+        
+        // Store timer info
+        activeTimers.set(userIdInt, {
+            duration,
+            endTime,
+            timeoutId
+        });
+        
+        res.json({ success: true, message: 'Timer started', endTime });
+        
+    } catch (error) {
+        console.error('Error starting timer:', error);
+        res.status(500).json({ error: 'Failed to start timer' });
+    }
+});
+
+// Cancel timer (called when session completes early)
+app.post('/cancel-timer', async (req, res) => {
+    try {
+        const { userId } = req.body;
+        
+        if (!userId) {
+            return res.status(400).json({ error: 'User ID is required' });
+        }
+        
+        const userIdInt = parseInt(userId);
+        
+        if (activeTimers.has(userIdInt)) {
+            clearTimeout(activeTimers.get(userIdInt).timeoutId);
+            activeTimers.delete(userIdInt);
+            console.log(`Timer cancelled for user ${userIdInt} - session completed early`);
+        }
+        
+        res.json({ success: true, message: 'Timer cancelled' });
+        
+    } catch (error) {
+        console.error('Error cancelling timer:', error);
+        res.status(500).json({ error: 'Failed to cancel timer' });
+    }
+});
+
 // Handle file upload
 app.post('/upload', upload.single('sketch'), async (req, res) => {
     try {
@@ -134,6 +216,14 @@ app.post('/upload', upload.single('sketch'), async (req, res) => {
         
         // Automatically mark session as complete since upload happened
         await markSessionComplete(parseInt(userId));
+        
+        // Cancel any active timer since session is complete
+        const userIdInt = parseInt(userId);
+        if (activeTimers.has(userIdInt)) {
+            clearTimeout(activeTimers.get(userIdInt).timeoutId);
+            activeTimers.delete(userIdInt);
+            console.log(`Timer cancelled for user ${userIdInt} - session completed via upload`);
+        }
         
         // Get updated stats
         const stats = await getUserStats(parseInt(userId));
