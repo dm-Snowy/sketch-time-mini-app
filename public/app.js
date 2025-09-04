@@ -46,6 +46,7 @@ class SketchTimer {
         this.resetBtn = document.getElementById('timer-reset');
         this.doneBtn = document.getElementById('done-btn');
         this.uploadBtn = document.getElementById('upload-btn');
+        this.fileInput = document.getElementById('file-input');
         this.presetBtns = document.querySelectorAll('.preset-btn');
         this.currentStreakEl = document.getElementById('current-streak');
         this.longestStreakEl = document.getElementById('longest-streak');
@@ -75,7 +76,10 @@ class SketchTimer {
         this.doneBtn.addEventListener('click', () => this.markSessionComplete());
         
         // Upload button
-        this.uploadBtn.addEventListener('click', () => this.openUploadDialog());
+        this.uploadBtn.addEventListener('click', () => this.triggerFileSelection());
+        
+        // File input change
+        this.fileInput.addEventListener('change', (e) => this.handleFileSelection(e));
     }
     
     async loadUserStats() {
@@ -170,7 +174,7 @@ class SketchTimer {
             // Timer started/completed today and no upload yet - enable button
             this.uploadBtn.disabled = false;
             this.uploadBtn.innerHTML = '<span class="btn-icon">📸</span> Upload Sketch';
-            this.uploadHelpEl.textContent = 'Ready to upload your sketch!';
+            this.uploadHelpEl.textContent = 'Click to select and upload your sketch!';
         } else {
             // Timer not started today - disable button
             this.uploadBtn.disabled = true;
@@ -309,14 +313,74 @@ class SketchTimer {
         }, 5000);
     }
     
-    openUploadDialog() {
-        if (window.Telegram && window.Telegram.WebApp) {
-            // Request camera access through Telegram
-            const tg = window.Telegram.WebApp;
-            tg.showAlert('Please upload your sketch through the bot chat by sending a photo!');
-        } else {
-            // Fallback for testing
-            alert('Please upload your sketch through the Telegram bot by sending a photo!');
+    triggerFileSelection() {
+        if (!this.uploadBtn.disabled) {
+            this.fileInput.click();
+        }
+    }
+    
+    async handleFileSelection(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        // Validate file type
+        if (!file.type.match(/^image\/(png|jpeg)$/)) {
+            this.showError('Please select a PNG or JPEG image file.');
+            return;
+        }
+        
+        // Validate file size (max 10MB)
+        if (file.size > 10 * 1024 * 1024) {
+            this.showError('File size must be less than 10MB.');
+            return;
+        }
+        
+        await this.uploadSketch(file);
+    }
+    
+    async uploadSketch(file) {
+        if (!this.userId) {
+            this.showError('User authentication required');
+            return;
+        }
+        
+        // Show upload progress
+        this.uploadBtn.disabled = true;
+        this.uploadBtn.innerHTML = '<span class="btn-icon">⏳</span> Uploading...';
+        this.uploadHelpEl.textContent = 'Uploading your sketch...';
+        
+        try {
+            const formData = new FormData();
+            formData.append('sketch', file);
+            formData.append('userId', this.userId.toString());
+            
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok && data.success) {
+                // Update stats with new data
+                this.stats = data.stats;
+                this.updateUI();
+                
+                // Show success message
+                this.showSuccess(data.message);
+                
+                // Clear file input
+                this.fileInput.value = '';
+                
+            } else {
+                this.showError(data.error || 'Failed to upload sketch');
+                this.updateUploadButtonState();
+            }
+            
+        } catch (error) {
+            console.error('Error uploading sketch:', error);
+            this.showError('Network error. Please check your connection and try again.');
+            this.updateUploadButtonState();
         }
     }
     

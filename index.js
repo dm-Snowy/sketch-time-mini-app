@@ -1,12 +1,41 @@
 const { Telegraf } = require('telegraf');
 const express = require('express');
 const path = require('path');
+const multer = require('multer');
+const fs = require('fs');
 const { initDatabase, saveUpload, getUserStats, markSessionComplete, hasUploadedToday } = require('./database');
 
 // Initialize bot and express app
 console.log('BOT_TOKEN available:', !!process.env.BOT_TOKEN);
 const bot = new Telegraf(process.env.BOT_TOKEN || 'your_bot_token_here');
 const app = express();
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const uploadDir = path.join(__dirname, 'uploads');
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/png') {
+            cb(null, true);
+        } else {
+            cb(new Error('Only PNG and JPEG files are allowed!'), false);
+        }
+    }
+});
 
 // Middleware
 app.use(express.json());
@@ -83,6 +112,47 @@ bot.on('document', (ctx) => {
 });
 
 // API Routes
+
+// Handle file upload
+app.post('/upload', upload.single('sketch'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+        
+        // Extract user ID from Telegram WebApp initData
+        // For now, we'll use a simple approach - in production you'd validate the initData
+        const { userId } = req.body;
+        
+        if (!userId) {
+            return res.status(400).json({ error: 'User ID is required' });
+        }
+        
+        // Save upload to database with file path instead of file_id
+        const filePath = req.file.path;
+        await saveUpload(parseInt(userId), 'WebApp User', filePath);
+        
+        // Get updated stats
+        const stats = await getUserStats(parseInt(userId));
+        
+        res.json({ 
+            success: true, 
+            message: 'Sketch uploaded successfully! 🎨',
+            stats: stats,
+            fileName: req.file.originalname
+        });
+        
+    } catch (error) {
+        console.error('Error handling file upload:', error);
+        
+        // Clean up uploaded file on error
+        if (req.file && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+        }
+        
+        res.status(500).json({ error: 'Failed to upload sketch' });
+    }
+});
 
 // Get user statistics
 app.get('/stats/:userId', async (req, res) => {
