@@ -10,8 +10,11 @@ class SketchTimer {
         this.initializeTelegramWebApp();
         this.initializeElements();
         this.initializeEventListeners();
-        this.loadUserStats();
-        this.loadTimerState();
+        
+        // Load timer state first, then stats
+        this.loadTimerState().then(() => {
+            this.loadUserStats();
+        });
     }
     
     initializeTelegramWebApp() {
@@ -56,9 +59,13 @@ class SketchTimer {
         this.uploadHelpEl = document.getElementById('upload-help');
         this.totalSketchesEl = document.getElementById('total-sketches');
         
+        // Set initial timer display
+        this.updateTimerDisplay();
+        
         this.timerStartedToday = false;
         this.timerCompleted = false;
         this.backendTimer = null; // { endTime, duration, isRunning }
+        this.timerStateLoaded = false; // Track if we've synced with backend
     }
     
     initializeEventListeners() {
