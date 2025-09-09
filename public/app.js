@@ -110,7 +110,12 @@ class SketchTimer {
     }
     
     async loadTimerState() {
-        if (!this.userId) return;
+        if (!this.userId) {
+            // No user ID available, show default state
+            this.timerStateLoaded = true;
+            this.updateTimerDisplay();
+            return;
+        }
         
         try {
             const response = await fetch(`/timer/${this.userId}`);
@@ -141,10 +146,19 @@ class SketchTimer {
                 this.startBackendSyncedTimer();
                 
                 console.log(`Timer resumed: ${Math.floor(timerData.remainingMs / 1000)} seconds remaining`);
+            } else {
+                // No active timer, show default preset
+                this.timeLeft = 15 * 60;
             }
+            
+            this.timerStateLoaded = true;
+            this.updateTimerDisplay();
             
         } catch (error) {
             console.error('Error loading timer state:', error);
+            // On error, show default state
+            this.timerStateLoaded = true;
+            this.updateTimerDisplay();
         }
     }
     
@@ -225,6 +239,11 @@ class SketchTimer {
     
     // Timer functionality
     updateTimerDisplay() {
+        // Don't update display until we've synced with backend
+        if (!this.timerStateLoaded) {
+            return;
+        }
+        
         const minutes = Math.floor(this.timeLeft / 60);
         const seconds = this.timeLeft % 60;
         this.timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
