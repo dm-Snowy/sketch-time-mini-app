@@ -302,24 +302,32 @@ class SketchTimer {
         clearInterval(this.timer);
         this.timeLeft = 15 * 60;
         this.backendTimer = null;
-        this.updateTimerDisplay();
         this.startBtn.textContent = 'Start';
         this.startBtn.disabled = false;
         document.querySelector('.timer-section').classList.remove('timer-running');
         
         // Cancel backend timer if exists
         this.cancelTimerNotification();
+        
+        // Force display update since user is actively resetting
+        if (this.timerStateLoaded) {
+            this.updateTimerDisplay();
+        }
     }
     
     setTimerPreset(minutes) {
         if (!this.isRunning) {
             this.timeLeft = minutes * 60;
             this.backendTimer = null;
-            this.updateTimerDisplay();
             
             // Update active preset
             this.presetBtns.forEach(btn => btn.classList.remove('active'));
             document.querySelector(`[data-minutes="${minutes}"]`).classList.add('active');
+            
+            // Force display update since user is actively changing preset
+            if (this.timerStateLoaded) {
+                this.updateTimerDisplay();
+            }
         }
     }
     
