@@ -11,6 +11,7 @@ class SketchTimer {
         this.initializeElements();
         this.initializeEventListeners();
         this.loadUserStats();
+        this.loadTimerState();
     }
     
     initializeTelegramWebApp() {
@@ -57,6 +58,7 @@ class SketchTimer {
         
         this.timerStartedToday = false;
         this.timerCompleted = false;
+        this.backendTimer = null; // { endTime, duration, isRunning }
     }
     
     initializeEventListeners() {
@@ -97,6 +99,45 @@ class SketchTimer {
         } catch (error) {
             console.error('Error loading user stats:', error);
             this.showError('Failed to load your statistics. Please try refreshing the page.');
+        }
+    }
+    
+    async loadTimerState() {
+        if (!this.userId) return;
+        
+        try {
+            const response = await fetch(`/timer/${this.userId}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const timerData = await response.json();
+            
+            if (timerData.hasActiveTimer && !timerData.isExpired) {
+                // Resume timer from backend state
+                this.backendTimer = {
+                    endTime: timerData.endTime,
+                    duration: timerData.duration,
+                    isRunning: true
+                };
+                
+                this.timeLeft = Math.floor(timerData.remainingMs / 1000);
+                this.isRunning = true;
+                this.timerStartedToday = true;
+                
+                this.startBtn.textContent = 'Running...';
+                this.startBtn.disabled = true;
+                document.querySelector('.timer-section').classList.add('timer-running');
+                
+                this.updateUploadButtonState();
+                this.startBackendSyncedTimer();
+                
+                console.log(`Timer resumed: ${Math.floor(timerData.remainingMs / 1000)} seconds remaining`);
+            }
+            
+        } catch (error) {
+            console.error('Error loading timer state:', error);
         }
     }
     
@@ -196,15 +237,28 @@ class SketchTimer {
             // Notify backend about timer start
             this.notifyTimerStart();
             
-            this.timer = setInterval(() => {
-                this.timeLeft--;
-                this.updateTimerDisplay();
-                
-                if (this.timeLeft <= 0) {
-                    this.timerComplete();
-                }
-            }, 1000);
+            this.startBackendSyncedTimer();
         }
+    }
+    
+    startBackendSyncedTimer() {
+        this.timer = setInterval(() => {
+            if (this.backendTimer && this.backendTimer.isRunning) {
+                // Calculate time left from backend endTime
+                const now = Date.now();
+                const remainingMs = Math.max(0, this.backendTimer.endTime - now);
+                this.timeLeft = Math.floor(remainingMs / 1000);
+            } else {
+                // Fallback to local countdown
+                this.timeLeft--;
+            }
+            
+            this.updateTimerDisplay();
+            
+            if (this.timeLeft <= 0) {
+                this.timerComplete();
+            }
+        }, 1000);
     }
     
     pauseTimer() {
@@ -346,7 +400,7 @@ class SketchTimer {
         const durationMinutes = Math.floor(this.timeLeft / 60);
         
         try {
-            await fetch('/start-timer', {
+            const response = await fetch('/start-timer', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -357,7 +411,18 @@ class SketchTimer {
                 }),
             });
             
-            console.log(`Timer started on backend: ${durationMinutes} minutes`);
+            const data = await response.json();
+            
+            if (response.ok) {
+                // Store backend timer info
+                this.backendTimer = {
+                    endTime: data.endTime,
+                    duration: durationMinutes,
+                    isRunning: true
+                };
+                
+                console.log(`Timer started on backend: ${durationMinutes} minutes`);
+            }
             
         } catch (error) {
             console.error('Error notifying backend about timer start:', error);

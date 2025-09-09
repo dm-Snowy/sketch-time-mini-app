@@ -5,7 +5,7 @@ const multer = require('multer');
 const fs = require('fs');
 
 // Timer tracking storage
-const activeTimers = new Map(); // userId -> { duration, endTime, timeoutId }
+const activeTimers = new Map(); // userId -> { duration, startTime, endTime, timeoutId }
 const { initDatabase, saveUpload, getUserStats, markSessionComplete, hasUploadedToday } = require('./database');
 
 // Initialize bot and express app
@@ -127,7 +127,8 @@ app.post('/start-timer', async (req, res) => {
         
         const userIdInt = parseInt(userId);
         const durationMs = duration * 60 * 1000; // convert to milliseconds
-        const endTime = Date.now() + durationMs;
+        const startTime = Date.now();
+        const endTime = startTime + durationMs;
         
         // Cancel existing timer for this user if any
         if (activeTimers.has(userIdInt)) {
@@ -158,15 +159,49 @@ app.post('/start-timer', async (req, res) => {
         // Store timer info
         activeTimers.set(userIdInt, {
             duration,
+            startTime,
             endTime,
             timeoutId
         });
         
-        res.json({ success: true, message: 'Timer started', endTime });
+        res.json({ success: true, message: 'Timer started', startTime, endTime });
         
     } catch (error) {
         console.error('Error starting timer:', error);
         res.status(500).json({ error: 'Failed to start timer' });
+    }
+});
+
+// Get current timer state
+app.get('/timer/:userId', async (req, res) => {
+    try {
+        const userIdInt = parseInt(req.params.userId);
+        
+        if (!userIdInt) {
+            return res.status(400).json({ error: 'Invalid user ID' });
+        }
+        
+        if (activeTimers.has(userIdInt)) {
+            const timerData = activeTimers.get(userIdInt);
+            const now = Date.now();
+            const remainingMs = Math.max(0, timerData.endTime - now);
+            const isExpired = remainingMs === 0;
+            
+            res.json({
+                hasActiveTimer: true,
+                duration: timerData.duration,
+                startTime: timerData.startTime,
+                endTime: timerData.endTime,
+                remainingMs: remainingMs,
+                isExpired: isExpired
+            });
+        } else {
+            res.json({ hasActiveTimer: false });
+        }
+        
+    } catch (error) {
+        console.error('Error getting timer state:', error);
+        res.status(500).json({ error: 'Failed to get timer state' });
     }
 });
 
