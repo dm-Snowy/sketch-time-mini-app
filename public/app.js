@@ -275,15 +275,20 @@ class SketchTimer {
         this.isRunning = false;
         clearInterval(this.timer);
         this.timeLeft = 15 * 60;
+        this.backendTimer = null;
         this.updateTimerDisplay();
         this.startBtn.textContent = 'Start';
         this.startBtn.disabled = false;
         document.querySelector('.timer-section').classList.remove('timer-running');
+        
+        // Cancel backend timer if exists
+        this.cancelTimerNotification();
     }
     
     setTimerPreset(minutes) {
         if (!this.isRunning) {
             this.timeLeft = minutes * 60;
+            this.backendTimer = null;
             this.updateTimerDisplay();
             
             // Update active preset
@@ -295,6 +300,12 @@ class SketchTimer {
     timerComplete() {
         this.pauseTimer();
         this.timerCompleted = true;
+        
+        // Clear backend timer state
+        if (this.backendTimer) {
+            this.backendTimer.isRunning = false;
+        }
+        
         this.showSuccess('🎉 Timer complete! Great work on your sketch session!');
         
         // Update upload button state when timer completes
@@ -375,6 +386,9 @@ class SketchTimer {
                 // Update stats with new data
                 this.stats = data.stats;
                 this.updateUI();
+                
+                // Cancel backend timer since session is complete
+                this.cancelTimerNotification();
                 
                 // Show success message
                 this.showSuccess(data.message);
