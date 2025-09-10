@@ -1,0 +1,5 @@
+node_modules
+.replit
+replit.nix
+sketches.db
+uploads/
