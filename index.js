@@ -54,11 +54,11 @@ bot.start((ctx) => {
 
 This bot helps you track your daily sketching habit and build streaks!
 
-📸 Send me your daily sketches (PNG/JPEG images)
 📊 Use the Mini-App to track your progress and streaks
 ⏱️ Built-in timer to help you focus on your art
+📸 Upload your daily sketch to mark it as completed and continue the streak (PNG/JPEG images)
 
-To get started, just send me a sketch or open the Mini-App!
+To get started, just open the app via the green "Launch Sketch-Time" button below 👇
     `;
     
     ctx.reply(welcomeMessage, {
