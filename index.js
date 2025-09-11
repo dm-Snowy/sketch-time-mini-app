@@ -134,7 +134,7 @@ app.post('/start-timer', async (req, res) => {
             try {
                 await bot.telegram.sendMessage(userIdInt, `⏰ Your ${duration}-minute session finished!`,
                     
-                });
+                );
                 
                 // Remove from active timers
                 activeTimers.delete(userIdInt);
