@@ -132,12 +132,8 @@ app.post('/start-timer', async (req, res) => {
         // Schedule bot notification
         const timeoutId = setTimeout(async () => {
             try {
-                await bot.telegram.sendMessage(userIdInt, `⏰ Your ${duration}-minute session finished!`, {
-                    reply_markup: {
-                        inline_keyboard: [[
-                            { text: '🎨 Open Mini-App', web_app: { url: `${process.env.APP_URL || 'https://your-app-url.com'}` } }
-                        ]]
-                    }
+                await bot.telegram.sendMessage(userIdInt, `⏰ Your ${duration}-minute session finished!`,
+                    
                 });
                 
                 // Remove from active timers
