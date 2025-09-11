@@ -62,8 +62,6 @@ To get started, just open the app via the green "Launch Sketch-Time" button belo
     `;
     
     ctx.reply(welcomeMessage);
-        }
-    });
 });
 
 // Handle photo uploads
