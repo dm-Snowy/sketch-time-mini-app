@@ -61,10 +61,8 @@ This bot helps you track your daily sketching habit and build streaks!
 To get started, just open the app via the green "Launch Sketch-Time" button below 👇
     `;
     
-    ctx.reply(welcomeMessage, {
-        reply_markup: {
-            inline_keyboard: [[
-                { text: '🎨 Open Sketch Tracker', web_app: { url: `${process.env.APP_URL || 'https://your-app-url.com'}` } }
+    ctx.reply(welcomeMessage);
+
             ]]
         }
     });
