@@ -129,22 +129,28 @@ app.post('/start-timer', async (req, res) => {
             clearTimeout(activeTimers.get(userIdInt).timeoutId);
         }
         
-        // Schedule bot notification
-        const timeoutId = setTimeout(async () => {
-            try {
-                await bot.telegram.sendMessage(userIdInt, `⏰ Your ${duration}-minute session finished!`,
-                    
-                );
-                
-                // Remove from active timers
-                activeTimers.delete(userIdInt);
-                console.log(`Timer notification sent to user ${userIdInt} for ${duration} minutes`);
-                
-            } catch (error) {
-                console.error('Error sending timer notification:', error);
-                activeTimers.delete(userIdInt);
-            }
-        }, durationMs);
+       // Schedule bot notification
+const timeoutId = setTimeout(() => {
+    (async () => {
+        try {
+            await bot.telegram.sendMessage(
+                userIdInt,
+                `⏰ Your ${duration}-minute session finished! Great job! 🎨`
+            );
+
+            // Optionally mark session complete
+            await markSessionComplete(userIdInt);
+
+            // Remove from active timers
+            activeTimers.delete(userIdInt);
+            console.log(`Timer notification sent to user ${userIdInt} for ${duration} minutes`);
+        } catch (error) {
+            console.error('Error sending timer notification:', error);
+            activeTimers.delete(userIdInt);
+        }
+    })();
+}, durationMs);
+
         
         // Store timer info
         activeTimers.set(userIdInt, {
