@@ -1,153 +1,124 @@
 // database.js
 const { Pool } = require('pg');
 
-// Use environment variable for security
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false } // required for Supabase
+  ssl: { rejectUnauthorized: false }
 });
 
-// Initialize database (create tables if not exist)
+// Create tables
 async function initDatabase() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS uploads (
       id SERIAL PRIMARY KEY,
-      user_id BIGINT NOT NULL,
+      userId BIGINT NOT NULL,
       username TEXT,
-      file_id TEXT NOT NULL,
-      upload_date DATE NOT NULL,
-      created_at TIMESTAMP DEFAULT NOW()
-    )
+      fileId TEXT,
+      createdAt TIMESTAMP DEFAULT NOW()
+    );
   `);
 
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS sessions (
-      id SERIAL PRIMARY KEY,
-      user_id BIGINT NOT NULL,
-      session_date DATE NOT NULL,
-      completed_at TIMESTAMP DEFAULT NOW(),
-      UNIQUE(user_id, session_date)
-    )
+    CREATE TABLE IF NOT EXISTS stats (
+      userId BIGINT PRIMARY KEY,
+      currentStreak INT DEFAULT 0,
+      longestStreak INT DEFAULT 0,
+      totalUploads INT DEFAULT 0,
+      lastUploadDate DATE
+    );
+  `);
+
+  -- ✅ NEW: timers table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS timers (
+      userId BIGINT PRIMARY KEY,
+      duration INT NOT NULL,
+      startTime BIGINT NOT NULL,
+      endTime BIGINT NOT NULL
+    );
   `);
 }
 
-// Save upload
+// Save sketch
 async function saveUpload(userId, username, fileId) {
-  const today = new Date().toISOString().split('T')[0];
-  const result = await pool.query(
-    `INSERT INTO uploads (user_id, username, file_id, upload_date)
-     VALUES ($1, $2, $3, $4)
-     RETURNING id`,
-    [userId, username, fileId, today]
-  );
-  return result.rows[0].id;
-}
-
-// Check if uploaded today
-async function hasUploadedToday(userId) {
-  const today = new Date().toISOString().split('T')[0];
-  const result = await pool.query(
-    `SELECT COUNT(*) FROM uploads WHERE user_id = $1 AND upload_date = $2`,
-    [userId, today]
-  );
-  return parseInt(result.rows[0].count, 10) > 0;
-}
-
-// Mark session complete
-async function markSessionComplete(userId) {
-  const today = new Date().toISOString().split('T')[0];
-  const result = await pool.query(
-    `INSERT INTO sessions (user_id, session_date)
-     VALUES ($1, $2)
-     ON CONFLICT (user_id, session_date) DO UPDATE
-     SET completed_at = NOW()
-     RETURNING id`,
-    [userId, today]
-  );
-  return result.rows[0].id;
-}
-
-// Get user stats
-async function getUserStats(userId) {
-  const uploads = await pool.query(
-    `SELECT DISTINCT upload_date FROM uploads WHERE user_id = $1 ORDER BY upload_date DESC`,
-    [userId]
-  );
-  const streakData = calculateStreaks(uploads.rows.map(r => r.upload_date.toISOString().split('T')[0]));
-
-  const totalUploads = await pool.query(
-    `SELECT COUNT(*) FROM uploads WHERE user_id = $1`,
-    [userId]
+  await pool.query(
+    'INSERT INTO uploads (userId, username, fileId) VALUES ($1, $2, $3)',
+    [userId, username, fileId]
   );
 
-  const history = await pool.query(
-    `SELECT upload_date, COUNT(*) as sketches
-     FROM uploads
-     WHERE user_id = $1
-     GROUP BY upload_date
-     ORDER BY upload_date DESC
-     LIMIT 30`,
-    [userId]
-  );
+  // update stats
+  const today = new Date().toISOString().slice(0, 10);
+  const res = await pool.query('SELECT * FROM stats WHERE userId = $1', [userId]);
 
-  return {
-    currentStreak: streakData.currentStreak,
-    longestStreak: streakData.longestStreak,
-    totalUploads: parseInt(totalUploads.rows[0].count, 10),
-    recentHistory: history.rows,
-    hasUploadedToday: streakData.hasUploadedToday
-  };
-}
-
-// Helper: streak calculation
-function calculateStreaks(uploadDates) {
-  if (uploadDates.length === 0) {
-    return { currentStreak: 0, longestStreak: 0, hasUploadedToday: false };
-  }
-
-  const today = new Date().toISOString().split('T')[0];
-  const hasUploadedToday = uploadDates.includes(today);
-
-  const dates = uploadDates.map(d => new Date(d)).sort((a, b) => b - a);
-
-  let currentStreak = 0;
-  let longestStreak = 1;
-  let tempStreak = 1;
-
-  const lastUpload = dates[0];
-  const todayDate = new Date(today);
-  const yesterdayDate = new Date(today);
-  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-
-  if (
-    lastUpload.toDateString() === todayDate.toDateString() ||
-    lastUpload.toDateString() === yesterdayDate.toDateString()
-  ) {
-    currentStreak = 1;
-
-    for (let i = 1; i < dates.length; i++) {
-      const prev = dates[i - 1];
-      const curr = dates[i];
-      const diff = Math.floor((prev - curr) / (1000 * 60 * 60 * 24));
-      if (diff === 1) {
-        currentStreak++;
-      } else break;
-    }
-  }
-
-  for (let i = 1; i < dates.length; i++) {
-    const prev = dates[i - 1];
-    const curr = dates[i];
-    const diff = Math.floor((prev - curr) / (1000 * 60 * 60 * 24));
-    if (diff === 1) {
-      tempStreak++;
-      longestStreak = Math.max(longestStreak, tempStreak);
+  if (res.rows.length === 0) {
+    await pool.query(
+      'INSERT INTO stats (userId, currentStreak, longestStreak, totalUploads, lastUploadDate) VALUES ($1, 1, 1, 1, $2)',
+      [userId, today]
+    );
+  } else {
+    let { currentstreak, longeststreak, totaluploads, lastuploaddate } = res.rows[0];
+    totaluploads++;
+    if (lastuploaddate === today) {
+      // already uploaded today
     } else {
-      tempStreak = 1;
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      if (lastuploaddate === yesterday) {
+        currentstreak++;
+      } else {
+        currentstreak = 1;
+      }
+      if (currentstreak > longeststreak) longeststreak = currentstreak;
     }
+    await pool.query(
+      'UPDATE stats SET currentStreak=$1, longestStreak=$2, totalUploads=$3, lastUploadDate=$4 WHERE userId=$5',
+      [currentstreak, longeststreak, totaluploads, today, userId]
+    );
   }
+}
 
-  return { currentStreak, longestStreak, hasUploadedToday };
+async function getUserStats(userId) {
+  const res = await pool.query('SELECT * FROM stats WHERE userId=$1', [userId]);
+  if (res.rows.length === 0) {
+    return { currentStreak: 0, longestStreak: 0, totalUploads: 0 };
+  }
+  return res.rows[0];
+}
+
+async function markSessionComplete(userId) {
+  // for now just noop — already handled in saveUpload
+  return;
+}
+
+async function hasUploadedToday(userId) {
+  const res = await pool.query(
+    'SELECT lastUploadDate FROM stats WHERE userId=$1',
+    [userId]
+  );
+  if (res.rows.length === 0) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return res.rows[0].lastuploaddate === today;
+}
+
+//
+// ✅ Timer helpers
+//
+async function saveTimer(userId, duration, startTime, endTime) {
+  await pool.query(
+    `INSERT INTO timers (userId, duration, startTime, endTime)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (userId)
+     DO UPDATE SET duration=$2, startTime=$3, endTime=$4`,
+    [userId, duration, startTime, endTime]
+  );
+}
+
+async function deleteTimer(userId) {
+  await pool.query('DELETE FROM timers WHERE userId=$1', [userId]);
+}
+
+async function getAllTimers() {
+  const res = await pool.query('SELECT * FROM timers');
+  return res.rows;
 }
 
 module.exports = {
@@ -155,5 +126,8 @@ module.exports = {
   saveUpload,
   getUserStats,
   markSessionComplete,
-  hasUploadedToday
+  hasUploadedToday,
+  saveTimer,
+  deleteTimer,
+  getAllTimers
 };
