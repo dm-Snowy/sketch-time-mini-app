@@ -28,7 +28,7 @@ async function initDatabase() {
     );
   `);
 
-  -- ✅ NEW: timers table
+    // ✅ NEW: timers table
   await pool.query(`
     CREATE TABLE IF NOT EXISTS timers (
       userId BIGINT PRIMARY KEY,
