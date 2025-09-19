@@ -5,7 +5,9 @@ const multer = require('multer');
 const fs = require('fs');
 
 // Timer tracking storage
-const activeTimers = new Map(); // userId -> { duration, startTime, endTime, timeoutId }
+// userId -> { duration, startTime, endTime, timeoutId }
+const activeTimers = new Map();
+
 const { initDatabase, saveUpload, getUserStats, markSessionComplete, hasUploadedToday } = require('./database');
 
 // Initialize bot and express app
@@ -30,7 +32,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
     storage: storage,
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
     fileFilter: (req, file, cb) => {
         if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/png') {
             cb(null, true);
@@ -44,10 +46,11 @@ const upload = multer({
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Initialize database
+// Initialize DB
 initDatabase();
 
-// Bot commands
+/* ========= BOT COMMANDS ========= */
+
 bot.start((ctx) => {
     const welcomeMessage = `
 🎨 Welcome to Sketch-Time! 
@@ -56,40 +59,32 @@ This bot helps you track your daily sketching habit and build streaks!
 
 📊 Use the Mini-App to track your progress and streaks
 ⏱️ Built-in timer to help you focus on your art
-📸 Upload your daily sketch to mark it as completed and continue the streak (PNG/JPEG images)
+📸 Upload your daily sketch to mark it as completed and continue the streak
 
-To get started, just open the app via the green "Launch Sketch-Time" button below 👇
+👉 Open the app via the green "Launch Sketch-Time" button below!
     `;
     
     ctx.reply(welcomeMessage);
 });
 
-// Handle photo uploads
 bot.on('photo', async (ctx) => {
     try {
         const userId = ctx.from.id;
         const username = ctx.from.username || ctx.from.first_name || 'Unknown';
-        const photo = ctx.message.photo[ctx.message.photo.length - 1]; // Get highest resolution
+        const photo = ctx.message.photo[ctx.message.photo.length - 1]; 
         const fileId = photo.file_id;
         
-        // Save upload to database
         await saveUpload(userId, username, fileId);
-        
-        // Get updated stats
         const stats = await getUserStats(userId);
         
-        const responseMessage = `
+        ctx.reply(`
 🎨 Great sketch! Added to your collection!
 
-📊 Your Stats:
+📊 Stats:
 🔥 Current Streak: ${stats.currentStreak} days
 🏆 Longest Streak: ${stats.longestStreak} days
 📈 Total Sketches: ${stats.totalUploads}
-
-Keep it up! ${stats.currentStreak > 0 ? '🔥' : '💪'}
-        `;
-        
-        ctx.reply(responseMessage, {
+        `, {
             reply_markup: {
                 inline_keyboard: [[
                     { text: '📊 View Full Stats', web_app: { url: `${process.env.APP_URL || 'https://your-app-url.com'}` } }
@@ -97,264 +92,186 @@ Keep it up! ${stats.currentStreak > 0 ? '🔥' : '💪'}
             }
         });
         
-    } catch (error) {
-        console.error('Error handling photo upload:', error);
-        ctx.reply('Sorry, there was an error saving your sketch. Please try again.');
+    } catch (err) {
+        console.error('Photo upload error:', err);
+        ctx.reply('Error saving sketch. Please try again.');
     }
 });
 
-// Handle non-photo files
 bot.on('document', (ctx) => {
-    ctx.reply('Please send your sketches as photos (PNG/JPEG) rather than documents for better tracking!');
+    ctx.reply('⚠️ Please send sketches as *photos* (PNG/JPEG) instead of documents!');
 });
 
-// API Routes
+/* ========= API ROUTES ========= */
 
-// Start timer tracking
+// Start timer
 app.post('/start-timer', async (req, res) => {
     try {
-        const { userId, duration } = req.body; // duration in minutes
-        
+        const { userId, duration } = req.body;
         if (!userId || !duration) {
-            return res.status(400).json({ error: 'User ID and duration are required' });
+            return res.status(400).json({ error: 'User ID and duration required' });
         }
-        
+
         const userIdInt = parseInt(userId);
-        const durationMs = duration * 60 * 1000; // convert to milliseconds
+        const durationMs = duration * 60 * 1000;
         const startTime = Date.now();
         const endTime = startTime + durationMs;
-        
-        // Cancel existing timer for this user if any
+
+        // Cancel existing timer if any
         if (activeTimers.has(userIdInt)) {
             clearTimeout(activeTimers.get(userIdInt).timeoutId);
         }
-        
-       // Schedule bot notification
-const timeoutId = setTimeout(() => {
-    (async () => {
-        try {
-            await bot.telegram.sendMessage(
-                userIdInt,
-                `⏰ Your ${duration}-minute session finished! Great job! 🎨`
-            );
 
-            // Mark session complete automatically
-            await markSessionComplete(userIdInt);
+        // Schedule notification
+        const timeoutId = setTimeout(async () => {
+            try {
+                await bot.telegram.sendMessage(
+                    userIdInt,
+                    `⏰ Your ${duration}-minute session finished! Great job! 🎨`
+                );
+                await markSessionComplete(userIdInt);
+            } catch (err) {
+                console.error('Timer notification error:', err);
+            } finally {
+                activeTimers.delete(userIdInt);
+            }
+        }, durationMs);
 
-            // Remove from active timers
-            activeTimers.delete(userIdInt);
-            console.log(`Timer notification sent to user ${userIdInt} for ${duration} minutes`);
-        } catch (error) {
-            console.error('Error sending timer notification:', error);
-            activeTimers.delete(userIdInt);
-        }
-    })();
-}, durationMs);
-        
-        // Store timer info
-        activeTimers.set(userIdInt, {
-            duration,
-            startTime,
-            endTime,
-            timeoutId
-        });
-        
-        res.json({ success: true, message: 'Timer started', startTime, endTime });
-        
-    } catch (error) {
-        console.error('Error starting timer:', error);
+        activeTimers.set(userIdInt, { duration, startTime, endTime, timeoutId });
+
+        res.json({ success: true, startTime, endTime });
+    } catch (err) {
+        console.error('Start timer error:', err);
         res.status(500).json({ error: 'Failed to start timer' });
     }
 });
 
-// Get current timer state
+// Get timer state
 app.get('/timer/:userId', async (req, res) => {
     try {
-        const userIdInt = parseInt(req.params.userId);
-        
-        if (!userIdInt) {
-            return res.status(400).json({ error: 'Invalid user ID' });
-        }
-        
-        if (activeTimers.has(userIdInt)) {
-            const timerData = activeTimers.get(userIdInt);
-            const now = Date.now();
-            const remainingMs = Math.max(0, timerData.endTime - now);
-            const isExpired = remainingMs === 0;
-            
-            res.json({
+        const userId = parseInt(req.params.userId);
+        if (!userId) return res.status(400).json({ error: 'Invalid user ID' });
+
+        if (activeTimers.has(userId)) {
+            const t = activeTimers.get(userId);
+            const remainingMs = Math.max(0, t.endTime - Date.now());
+
+            return res.json({
                 hasActiveTimer: true,
-                duration: timerData.duration,
-                startTime: timerData.startTime,
-                endTime: timerData.endTime,
-                remainingMs: remainingMs,
-                isExpired: isExpired
+                duration: t.duration,
+                startTime: t.startTime,
+                endTime: t.endTime,
+                remainingMs,
+                isExpired: remainingMs === 0
             });
-        } else {
-            res.json({ hasActiveTimer: false });
         }
-        
-    } catch (error) {
-        console.error('Error getting timer state:', error);
-        res.status(500).json({ error: 'Failed to get timer state' });
+        res.json({ hasActiveTimer: false });
+    } catch (err) {
+        console.error('Get timer error:', err);
+        res.status(500).json({ error: 'Failed to get timer' });
     }
 });
 
-// Cancel timer (called when session completes early)
+// Cancel timer early
 app.post('/cancel-timer', async (req, res) => {
     try {
         const { userId } = req.body;
-        
-        if (!userId) {
-            return res.status(400).json({ error: 'User ID is required' });
-        }
-        
+        if (!userId) return res.status(400).json({ error: 'User ID required' });
+
         const userIdInt = parseInt(userId);
-        
         if (activeTimers.has(userIdInt)) {
             clearTimeout(activeTimers.get(userIdInt).timeoutId);
             activeTimers.delete(userIdInt);
-            console.log(`Timer cancelled for user ${userIdInt} - session completed early`);
+
+            // Mark as complete on cancel
+            await markSessionComplete(userIdInt);
+            console.log(`Timer cancelled & session completed for user ${userIdInt}`);
         }
-        
-        res.json({ success: true, message: 'Timer cancelled' });
-        
-    } catch (error) {
-        console.error('Error cancelling timer:', error);
+
+        res.json({ success: true, message: 'Timer cancelled and session completed' });
+    } catch (err) {
+        console.error('Cancel timer error:', err);
         res.status(500).json({ error: 'Failed to cancel timer' });
     }
 });
 
-// Handle file upload
+// Upload sketch
 app.post('/upload', upload.single('sketch'), async (req, res) => {
     try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No file uploaded' });
-        }
-        
-        // Extract user ID from Telegram WebApp initData
-        // For now, we'll use a simple approach - in production you'd validate the initData
+        if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
         const { userId } = req.body;
-        
-        if (!userId) {
-            return res.status(400).json({ error: 'User ID is required' });
-        }
-        
-        // Save upload to database with file path instead of file_id
+        if (!userId) return res.status(400).json({ error: 'User ID required' });
+
         const filePath = req.file.path;
         await saveUpload(parseInt(userId), 'WebApp User', filePath);
-        
-        // Automatically mark session as complete since upload happened
         await markSessionComplete(parseInt(userId));
-        
-        // Cancel any active timer since session is complete
+
         const userIdInt = parseInt(userId);
         if (activeTimers.has(userIdInt)) {
             clearTimeout(activeTimers.get(userIdInt).timeoutId);
             activeTimers.delete(userIdInt);
-            console.log(`Timer cancelled for user ${userIdInt} - session completed via upload`);
         }
-        
-        // Get updated stats
+
         const stats = await getUserStats(parseInt(userId));
-        
-        res.json({ 
-            success: true, 
-            message: 'Sketch uploaded successfully! 🎨',
-            stats: stats,
-            fileName: req.file.originalname
-        });
-        
-    } catch (error) {
-        console.error('Error handling file upload:', error);
-        
-        // Clean up uploaded file on error
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
-        
+        res.json({ success: true, message: 'Sketch uploaded! 🎨', stats, fileName: req.file.originalname });
+    } catch (err) {
+        console.error('Upload error:', err);
+        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
         res.status(500).json({ error: 'Failed to upload sketch' });
     }
 });
 
-// Get user statistics
+// Stats
 app.get('/stats/:userId', async (req, res) => {
     try {
         const userId = parseInt(req.params.userId);
-        
-        if (!userId) {
-            return res.status(400).json({ error: 'Invalid user ID' });
-        }
-        
+        if (!userId) return res.status(400).json({ error: 'Invalid user ID' });
         const stats = await getUserStats(userId);
         res.json(stats);
-        
-    } catch (error) {
-        console.error('Error fetching stats:', error);
+    } catch (err) {
+        console.error('Stats error:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
 
-// Mark daily session as complete
+// Done (mark session complete)
 app.post('/done', async (req, res) => {
     try {
         const { userId } = req.body;
-        
-        if (!userId) {
-            return res.status(400).json({ error: 'User ID is required' });
-        }
-        
-        // Check if user has uploaded an image today
+        if (!userId) return res.status(400).json({ error: 'User ID required' });
+
         const hasUploaded = await hasUploadedToday(userId);
-        
         if (!hasUploaded) {
-            return res.status(400).json({ 
-                error: 'You must upload a sketch today before marking the session as complete!' 
-            });
+            return res.status(400).json({ error: 'Upload a sketch first!' });
         }
-        
-        // Mark session complete
+
         await markSessionComplete(userId);
-        
-        // Get updated stats
         const stats = await getUserStats(userId);
-        
-        res.json({ 
-            success: true, 
-            message: 'Session marked as complete! Great work! 🎨',
-            stats: stats
-        });
-        
-    } catch (error) {
-        console.error('Error marking session complete:', error);
+        res.json({ success: true, message: 'Session complete! 🎨', stats });
+    } catch (err) {
+        console.error('Done error:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
 
-// Serve the Mini-App
+// Serve Mini-App
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Error handling
+// Bot error handler
 bot.catch((err, ctx) => {
     console.error('Bot error:', err);
-    ctx.reply('An error occurred. Please try again.');
+    ctx.reply('⚠️ An error occurred, please try again.');
 });
 
-// Start services
+/* ========= START SERVICES ========= */
+
 const PORT = process.env.PORT || 5000;
+app.listen(PORT, '0.0.0.0', () => console.log(`Express server on port ${PORT}`));
 
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Express server running on port ${PORT}`);
-});
+bot.launch().then(() => console.log('Telegram bot started')).catch(console.error);
 
-bot.launch().then(() => {
-    console.log('Telegram bot started successfully');
-}).catch((error) => {
-    console.error('Error starting bot:', error);
-});
-
-// Enable graceful stop
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
+
