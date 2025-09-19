@@ -138,7 +138,7 @@ const timeoutId = setTimeout(() => {
                 `⏰ Your ${duration}-minute session finished! Great job! 🎨`
             );
 
-            // Optionally mark session complete
+            // Mark session complete automatically
             await markSessionComplete(userIdInt);
 
             // Remove from active timers
@@ -150,7 +150,6 @@ const timeoutId = setTimeout(() => {
         }
     })();
 }, durationMs);
-
         
         // Store timer info
         activeTimers.set(userIdInt, {
